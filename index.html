@@ -272,7 +272,7 @@ $('wSend').onclick=()=>{
   const p=spot(d.n+Math.floor(Math.random()*500));d.x=p[0];d.z=p[1];
   if(CLOUD){
     if(!myUid){toast('연결 중이에요. 잠시 후 다시 시도해 주세요');return;}
-    db.collection('letters').add({from:d.from,text:d.text,c:d.c,n:d.n,x:d.x,z:d.z,uid:myUid,createdAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>toast('저장에 실패했어요'));
+    db.collection('letters').add({from:d.from,text:d.text,c:d.c,n:d.n,x:d.x,z:d.z,uid:myUid,createdAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(e=>{console.error(e);toast('저장 실패: '+(e.code||e.message),12000);});
   }else{gifts.push(d);save();addGift(d,true);setTop();}
   $('msg').value='';show('ovWrite',false);toast('편지가 선물로 변신했어요! 끌어서 옮길 수 있어요 🎁');
 };
@@ -284,7 +284,7 @@ function openGift(id){
 $('rClose').onclick=()=>show('ovRead',false);
 $('rDel').onclick=()=>{
   if(!confirm('이 편지를 삭제할까요? 선물도 함께 사라져요.'))return;
-  if(CLOUD){db.collection('letters').doc(openId).delete().catch(()=>toast('삭제에 실패했어요'));show('ovRead',false);toast('편지를 삭제했어요');return;}
+  if(CLOUD){db.collection('letters').doc(openId).delete().catch(e=>{console.error(e);toast('삭제 실패: '+(e.code||e.message),12000);});show('ovRead',false);toast('편지를 삭제했어요');return;}
   gifts=gifts.filter(x=>x.id!==openId);save();
   const o=giftObjs.get(openId);if(o){S.remove(o);giftObjs.delete(openId);}
   show('ovRead',false);setTop();toast('편지를 삭제했어요');
@@ -458,7 +458,7 @@ function dragMove(x,y){
 function dropG(){
   dragG.position.y=0;
   const d=gifts.find(q=>q.id===dragG.userData.id);
-  if(d){d.x=dragG.position.x;d.z=dragG.position.z;if(CLOUD)db.collection('letters').doc(d.id).update({x:d.x,z:d.z}).catch(()=>toast('위치 저장에 실패했어요'));else save();}
+  if(d){d.x=dragG.position.x;d.z=dragG.position.z;if(CLOUD)db.collection('letters').doc(d.id).update({x:d.x,z:d.z}).catch(e=>{console.error(e);toast('위치 저장 실패: '+(e.code||e.message),12000);});else save();}
   toast('선물을 옮겼어요 🎁');
 }
 function catchLeaf(m){

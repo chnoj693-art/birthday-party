@@ -261,7 +261,7 @@ gifts.forEach(d=>addGift(d,false));
 // UI
 let nameTxt='강대민';
 function setTop(){$('top').textContent='🎂 '+nameTxt+'님, 생일 축하해요! · 선물 '+gifts.length+'개 · 🍁'+score;}
-function toast(s){const t=$('toast');t.textContent=s;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,1800);}
+function toast(s,ms){const t=$('toast');t.textContent=s;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,ms||1800);}
 const show=(id,v)=>$(id).classList.toggle('show',v);
 $('bWrite').onclick=()=>show('ovWrite',true);
 $('wCancel').onclick=()=>show('ovWrite',false);
@@ -620,7 +620,7 @@ if(CLOUD){
   try{
     firebase.initializeApp(FIREBASE_CONFIG);db=firebase.firestore();
     firebase.auth().onAuthStateChanged(u=>{if(u)myUid=u.uid;});
-    firebase.auth().signInAnonymously().catch(()=>toast('로그인에 실패했어요. Firebase 설정을 확인하세요'));
+    firebase.auth().signInAnonymously().catch(e=>{console.error(e);toast('로그인 실패: '+(e.code||e.message),12000);});
     let first=true;
     db.collection('letters').orderBy('createdAt').onSnapshot(snap=>{
       snap.docChanges().forEach(ch=>{
@@ -635,7 +635,7 @@ if(CLOUD){
         }
       });
       first=false;setTop();
-    },()=>toast('편지를 불러오지 못했어요'));
+    },e=>{console.error(e);toast('편지 불러오기 실패: '+(e.code||e.message),12000);});
   }catch(e){toast('Firebase 설정을 확인하세요');}
 }
 setTop();frame();

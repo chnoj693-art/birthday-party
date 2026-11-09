@@ -85,7 +85,21 @@ textarea{height:140px;resize:none}
 </div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
+// ===== Firebase 설정: Firebase 콘솔 > 프로젝트 설정 > 내 앱 > 웹 앱의 firebaseConfig 값을 붙여넣으세요 =====
+const FIREBASE_CONFIG={
+  apiKey:'AIzaSyC8VPI0OaaXidi_5aNC2GcJ0TYfsbSzGJs',
+  authDomain:'birthday-27050.firebaseapp.com',
+  projectId:'birthday-27050',
+  appId:'1:284458636217:web:39725032194d611e3fdc68'
+};
+// 설정을 채우지 않으면 예전처럼 이 브라우저에만 저장돼요.
+const CLOUD=!FIREBASE_CONFIG.apiKey.startsWith('여기에');
+let db=null,myUid=null;
+function canEdit(d){return !CLOUD||d.uid===myUid;}
 const $=id=>document.getElementById(id);
 const T=THREE, cv=$('c');
 const R=new T.WebGLRenderer({canvas:cv,antialias:true});
@@ -227,8 +241,8 @@ for(let i=0;i<110;i++){
 // gifts
 let gifts=[];const giftObjs=new Map();
 const pastel=[0xff8fa8,0x7ab8ff,0x8fe08f,0xc59cff,0xffc060,0x66d6d0];
-try{gifts=JSON.parse(localStorage.getItem('bday-gifts')||'[]');if(!Array.isArray(gifts))gifts=[];}catch(e){gifts=[];}
-function save(){try{localStorage.setItem('bday-gifts',JSON.stringify(gifts));}catch(e){}}
+if(!CLOUD){try{gifts=JSON.parse(localStorage.getItem('bday-gifts')||'[]');if(!Array.isArray(gifts))gifts=[];}catch(e){gifts=[];}}
+function save(){if(CLOUD)return;try{localStorage.setItem('bday-gifts',JSON.stringify(gifts));}catch(e){}}
 function spot(n){let k=n,x=5,z=5;for(let i=0;i<20;i++,k++){const a=(k*137.5)*Math.PI/180,r=5.6+(k%3)*.9;x=Math.sin(a)*r;z=Math.cos(a)*r;if(Math.hypot(x,z+6.3)>2.9)break;}return [x,z];}
 function addGift(d,drop){
   const g=new T.Group(),c=pastel[d.c%6];
@@ -254,18 +268,23 @@ $('wCancel').onclick=()=>show('ovWrite',false);
 $('wSend').onclick=()=>{
   const text=$('msg').value.trim();
   if(!text){toast('편지 내용을 적어주세요');return;}
-  const d={id:'g'+Date.now(),from:$('from').value.trim()||'익명',text,c:Math.floor(Math.random()*6),n:counter++};
-  gifts.push(d);save();addGift(d,true);setTop();
+  const d={id:'g'+Date.now(),from:$('from').value.trim().slice(0,12)||'익명',text:text.slice(0,300),c:Math.floor(Math.random()*6),n:CLOUD?Math.floor(Math.random()*1000):counter++};
+  const p=spot(d.n+Math.floor(Math.random()*500));d.x=p[0];d.z=p[1];
+  if(CLOUD){
+    if(!myUid){toast('연결 중이에요. 잠시 후 다시 시도해 주세요');return;}
+    db.collection('letters').add({from:d.from,text:d.text,c:d.c,n:d.n,x:d.x,z:d.z,uid:myUid,createdAt:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>toast('저장에 실패했어요'));
+  }else{gifts.push(d);save();addGift(d,true);setTop();}
   $('msg').value='';show('ovWrite',false);toast('편지가 선물로 변신했어요! 끌어서 옮길 수 있어요 🎁');
 };
 let openId=null;
 function openGift(id){
   const d=gifts.find(x=>x.id===id);if(!d)return;
-  openId=id;$('readFrom').textContent='💌 '+d.from+'님의 편지';$('readText').textContent=d.text;show('ovRead',true);
+  openId=id;$('rDel').style.display=canEdit(d)?'':'none';$('readFrom').textContent='💌 '+d.from+'님의 편지';$('readText').textContent=d.text;show('ovRead',true);
 }
 $('rClose').onclick=()=>show('ovRead',false);
 $('rDel').onclick=()=>{
   if(!confirm('이 편지를 삭제할까요? 선물도 함께 사라져요.'))return;
+  if(CLOUD){db.collection('letters').doc(openId).delete().catch(()=>toast('삭제에 실패했어요'));show('ovRead',false);toast('편지를 삭제했어요');return;}
   gifts=gifts.filter(x=>x.id!==openId);save();
   const o=giftObjs.get(openId);if(o){S.remove(o);giftObjs.delete(openId);}
   show('ovRead',false);setTop();toast('편지를 삭제했어요');
@@ -426,7 +445,7 @@ let dragG=null;const gPlane=new T.Plane(new T.Vector3(0,1,0),0),gPt=new T.Vector
 function hitGift(x,y){
   v2.set(x/innerWidth*2-1,-(y/innerHeight)*2+1);ray.setFromCamera(v2,cam);
   const h=ray.intersectObjects([...giftObjs.values()],true)[0];if(!h)return null;
-  let o=h.object;while(o&&!o.userData.id)o=o.parent;return o||null;
+  let o=h.object;while(o&&!o.userData.id)o=o.parent;if(!o)return null;const d=gifts.find(q=>q.id===o.userData.id);return d&&canEdit(d)?o:null;
 }
 function dragMove(x,y){
   v2.set(x/innerWidth*2-1,-(y/innerHeight)*2+1);ray.setFromCamera(v2,cam);
@@ -439,7 +458,7 @@ function dragMove(x,y){
 function dropG(){
   dragG.position.y=0;
   const d=gifts.find(q=>q.id===dragG.userData.id);
-  if(d){d.x=dragG.position.x;d.z=dragG.position.z;save();}
+  if(d){d.x=dragG.position.x;d.z=dragG.position.z;if(CLOUD)db.collection('letters').doc(d.id).update({x:d.x,z:d.z}).catch(()=>toast('위치 저장에 실패했어요'));else save();}
   toast('선물을 옮겼어요 🎁');
 }
 function catchLeaf(m){
@@ -596,6 +615,28 @@ function frame(){
   bub.visible=t-greetT<5;
   if(cheer.visible){const k=t-cheerT;cheer.position.y=4.5+k*.8;cheer.material.opacity=Math.max(0,1-k/4);if(k>4)cheer.visible=false;}
   place();R.render(S,cam);requestAnimationFrame(frame);
+}
+if(CLOUD){
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);db=firebase.firestore();
+    firebase.auth().onAuthStateChanged(u=>{if(u)myUid=u.uid;});
+    firebase.auth().signInAnonymously().catch(()=>toast('로그인에 실패했어요. Firebase 설정을 확인하세요'));
+    let first=true;
+    db.collection('letters').orderBy('createdAt').onSnapshot(snap=>{
+      snap.docChanges().forEach(ch=>{
+        const d=Object.assign({id:ch.doc.id},ch.doc.data());
+        if(ch.type==='added'){if(!giftObjs.has(d.id)){gifts.push(d);addGift(d,!first);}}
+        else if(ch.type==='modified'){
+          const i=gifts.findIndex(q=>q.id===d.id);if(i>=0)gifts[i]=d;
+          const o=giftObjs.get(d.id);if(o&&o!==dragG&&typeof d.x==='number'){o.position.x=d.x;o.position.z=d.z;}
+        }else if(ch.type==='removed'){
+          gifts=gifts.filter(q=>q.id!==d.id);
+          const o=giftObjs.get(d.id);if(o){S.remove(o);giftObjs.delete(d.id);}
+        }
+      });
+      first=false;setTop();
+    },()=>toast('편지를 불러오지 못했어요'));
+  }catch(e){toast('Firebase 설정을 확인하세요');}
 }
 setTop();frame();
 </script>
